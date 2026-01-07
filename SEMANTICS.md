@@ -1,36 +1,40 @@
 # Semantics for Coding Agent
 
-## PRNG & Deterministic Generation (Candidate)
+## PRNG & Deterministic Generation (LOCKED)
 
 ### PRNG Requirement
 
 1. Every generator function **MUST** accept an explicit PRNG input named `rng`.
-2. No generator **MAY** read randomness from any implicit or global source (including global RNGs, time, OS entropy, map iteration order, or concurrency scheduling).
+2. No generator **MAY** read randomness from any implicit or global source (including global RNGs, time, OS entropy, map iteration order, iteration over sets, unstable sort tie-breaking, or concurrency scheduling).
 
 ### Determinism
 
-1. A generator **MUST** be deterministic: given identical:
+3. A generator **MUST** be deterministic: given identical:
 
     * input PRNG state,
     * generator parameters,
     * and identical call order,
       it **MUST** produce identical outputs.
 
-2. All “first/next” rules refer to **generation index order** (creation order), not any ordering derived from coordinates, distance, sorting, or IDs.
+4. All “first/next” rules refer to generation index order (creation order), not any ordering derived from map iteration, sets, unstable sort tie-breaking, concurrency scheduling, coordinates, distance, sorting, or IDs.
+
+“Input PRNG state” means the full internal state of the PRNG at the moment the generator function is invoked (not merely its initial seed).
 
 ### Child PRNGs (Entity-Local RNGs)
 
-1. If an entity requires its own PRNG (`entity.rng`), the entity PRNG **MUST** be derived deterministically from the parent PRNG `rng` **at the moment the entity is created**, and in **creation order**.
+5. If an entity requires its own PRNG (`entity.rng`), the entity PRNG **MUST** be derived deterministically from the parent PRNG `rng` **at the moment the entity is created**, and in **creation order**.
 
-2. Child PRNG derivation **MUST** consume randomness from the parent PRNG. (This makes child seeding part of the parent’s deterministic stream and prevents “seed skipping” bugs.)
+6. Child PRNG derivation **MUST** consume randomness from the parent PRNG. (This makes child seeding part of the parent’s deterministic stream and prevents “seed skipping” bugs.)
 
-3. Child PRNG derivation is **normative** and is defined in `REFERENCE.md` as `derive_child_rng(parent_rng) -> child_rng`.
+7. Child PRNG derivation is **normative** and is defined in `REFERENCE.md` as `derive_child_rng(parent_rng) -> child_rng`.
 
 ### Go PRNG Family
 
-1. All PRNGs are from Go’s `math/rand/v2`.
+8. All PRNGs are from Go’s `math/rand/v2`.
 
-2. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** be `PCG` PRNG instances (via `math/rand/v2`), and child PRNGs **MUST** also be `PCG`.
+9. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** be created using the PCG constructor (NewPCG(seed, seq)), and child PRNGs MUST also be created using NewPCG.
+
+10. PRNGs MUST NOT be re-seeded after creation.
 
 ---
 
