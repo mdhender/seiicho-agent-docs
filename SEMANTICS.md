@@ -1,6 +1,6 @@
 # Semantics for Coding Agent
 
-## PRNG & Deterministic Generation (LOCKED)
+## PRNG & Deterministic Generation (Candidate)
 
 ### PRNG Requirement
 
@@ -30,9 +30,9 @@
 
 ### Go PRNG Family
 
-8. All PRNGs are from Go’s `math/rand/v2`.
+8. All PRNGs are from the `github.com/mdhender/prng` package (which implement Go’s `math/rand/v2` Rand methods).
 
-9. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** be created using the PCG constructor (NewPCG(seed, seq)), and child PRNGs MUST also be created using NewPCG.
+9. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** create a new PRNG seeded with a PCG constructor (`rng := prng.Rand(rand.NewPCG(seed, seq))`, and child PRNGs **MUST** be created using `child_rng: = rng.Child()`.
 
 10. PRNGs MUST NOT be re-seeded after creation.
 
