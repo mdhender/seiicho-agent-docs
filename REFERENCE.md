@@ -1,5 +1,35 @@
 # REFERENCE.md
 
+## Canonical PRNG Derivation (Executable-Style Pseudocode) (Candidate)
+
+```text
+# derive_child_rng produces a new PRNG for an entity.
+# It is the ONLY allowed method to create entity-local PRNGs.
+
+function derive_child_rng(parent_rng):
+    # PCG in math/rand/v2 is seeded by two 64-bit values.
+    # We derive both from the parent stream in creation order.
+
+    seed := parent_rng.Uint64()
+    seq  := parent_rng.Uint64()
+
+    # seq MUST be odd for PCG stream selection.
+    # Force odd deterministically.
+    seq := seq OR 1
+
+    return NewPCG(seed, seq)
+```
+
+```text
+# Example: entity creation
+function create_entity(parent_rng, ...):
+    entity_rng := derive_child_rng(parent_rng)
+    entity := new Entity()
+    entity.rng = entity_rng
+    ...
+    return entity
+```
+
 ## Notation
 
 ```pseudocode

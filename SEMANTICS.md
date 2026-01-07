@@ -1,16 +1,40 @@
 # Semantics for Coding Agent
 
-## Deterministic Generation
+## PRNG & Deterministic Generation (Candidate)
 
-All generators MUST accept a PRNG input. Any created entity that needs its own PRNG MUST be seeded deterministically from the input PRNG in creation order.
+### PRNG Requirement
 
-The generator MUST be deterministic. Given the same input PRNG state and parameters, it MUST produce identical results.
+1. Every generator function **MUST** accept an explicit PRNG input named `rng`.
+2. No generator **MAY** read randomness from any implicit or global source (including global RNGs, time, OS entropy, map iteration order, or concurrency scheduling).
 
-All “first/next” rules refer to generation index order, not sorted by coordinates or distance.
+### Determinism
 
-All PRNGs are from `math/rand/v2`.
+1. A generator **MUST** be deterministic: given identical:
 
-## Cluster Generation
+    * input PRNG state,
+    * generator parameters,
+    * and identical call order,
+      it **MUST** produce identical outputs.
+
+2. All “first/next” rules refer to **generation index order** (creation order), not any ordering derived from coordinates, distance, sorting, or IDs.
+
+### Child PRNGs (Entity-Local RNGs)
+
+1. If an entity requires its own PRNG (`entity.rng`), the entity PRNG **MUST** be derived deterministically from the parent PRNG `rng` **at the moment the entity is created**, and in **creation order**.
+
+2. Child PRNG derivation **MUST** consume randomness from the parent PRNG. (This makes child seeding part of the parent’s deterministic stream and prevents “seed skipping” bugs.)
+
+3. Child PRNG derivation is **normative** and is defined in `REFERENCE.md` as `derive_child_rng(parent_rng) -> child_rng`.
+
+### Go PRNG Family
+
+1. All PRNGs are from Go’s `math/rand/v2`.
+
+2. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** be `PCG` PRNG instances (via `math/rand/v2`), and child PRNGs **MUST** also be `PCG`.
+
+---
+
+## Cluster Generation (Draft)
 
 Generation order is always: **systems → stars → orbits → planets**.
 

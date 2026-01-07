@@ -12,6 +12,8 @@ The primary goal is to enable **correct, deterministic implementation by coding 
 
 This is a **specification effort**, not a design playground.
 
+The official repository is **github.com:mdhender/seiicho-agent-docs**.
+
 ---
 
 ## Scope

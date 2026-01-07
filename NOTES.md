@@ -4,7 +4,7 @@ Agents must ignore this file.
 
 ----
 
-Thank you. Writing the RULEBOOK, SEMANTICS, and REFERENCE is going to be an iterative process. Help me understand the best way to coordinate with you. Should I create a separate project for this (as opposed to including it in this project which is a hodgepodge of design and coding questions)?
+Writing the RULEBOOK, SEMANTICS, and REFERENCE is going to be an iterative process. Help me understand the best way to coordinate with you. Should I create a separate project for this (as opposed to including it in this project which is a hodgepodge of design and coding questions)?
 
 ---
 
