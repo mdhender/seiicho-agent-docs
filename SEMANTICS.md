@@ -1,6 +1,6 @@
 # Semantics for Coding Agent
 
-## PRNG & Deterministic Generation (Candidate)
+## PRNG & Deterministic Generation (Locked)
 
 ### PRNG Requirement
 
@@ -49,7 +49,7 @@ rng.Child() is normative and **MUST** be equivalent to `derive_child_rng(parent_
 
 ---
 
-## Location-Based Identifiers (Candidate)
+## Location-Based Identifiers (Locked)
 
 ### Overview
 
@@ -268,7 +268,7 @@ to a planet identifier.
 
 ---
 
-## Cluster Generation (Candidate)
+## Cluster Generation (Locked)
 
 ### Overview
 
@@ -282,7 +282,7 @@ All generation steps are **deterministic** and **PRNG-driven**, subject to the r
 
 ---
 
-## System Generation (Candidate)
+## System Generation (Locked)
 
 ### Generation Order
 

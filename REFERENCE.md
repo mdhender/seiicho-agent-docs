@@ -1,6 +1,6 @@
 # REFERENCE.md
 
-## Canonical PRNG Derivation (Executable-Style Pseudocode) (Candidate)
+## Canonical PRNG Derivation (Executable-Style Pseudocode) (Locked)
 
 ```text
 # game_rng produces a new PRNG for a new game.
@@ -35,7 +35,7 @@ function create_entity(parent_rng, ...):
     return entity
 ```
 
-## Location-Based Identifier Construction & Parsing (Candidate)
+## Location-Based Identifier Construction & Parsing (Locked)
 
 ---
 
