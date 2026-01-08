@@ -30,11 +30,22 @@
 
 ### Go PRNG Family
 
-8. All PRNGs are from the `github.com/mdhender/prng` package (which implement Go’s `math/rand/v2` Rand methods).
+8. All PRNGs are instances of `*prng.Rand` from `github.com/mdhender/prng` (version **MUST** be >= v1.1.0) and **MUST** provide the same method behavior as Go’s `math/rand/v2` `*rand.Rand` for all methods used by this specification.
 
-9. To avoid ambiguity across possible `math/rand/v2` engines, all PRNG instances used by Seiicho generators **MUST** create a new PRNG seeded with a PCG constructor (`rng := prng.Rand(rand.NewPCG(seed, seq))`, and child PRNGs **MUST** be created using `child_rng: = rng.Child()`.
+9. All PRNG instances used by Seiicho generators **MUST** be backed by a PCG source created with `math/rand/v2`:
+>   src := rand.NewPCG(seed, seq)
 
-10. PRNGs MUST NOT be re-seeded after creation.
+`src` **MUST** be a `*rand.PCG` instance (not a `*rand.Rand` and not any other engine).
+
+The canonical way to construct a Seiicho PRNG is:
+>   rng := prng.New(src)
+
+10. Child PRNGs **MUST** be created **ONLY** via:
+>   child_rng := rng.Child()
+
+rng.Child() is normative and **MUST** be equivalent to `derive_child_rng(parent_rng)` as defined in `REFERENCE.md`.
+
+11. PRNGs **MUST NOT** be re-seeded after creation.
 
 ---
 

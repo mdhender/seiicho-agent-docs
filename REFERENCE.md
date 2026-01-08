@@ -1,22 +1,28 @@
 # REFERENCE.md
 
-## Canonical PRNG Derivation (Executable-Style Pseudocode) (LOCKED)
+## Canonical PRNG Derivation (Executable-Style Pseudocode) (Candidate)
+
+```text
+# game_rng produces a new PRNG for a new game.
+# It is the ONLY allowed method to create a PRNG for generating new games.
+# This PRNG will be the root of all PRNGs used in the game.
+# The source MUST be a *rand.PCG; not any other engine.
+
+import (
+    prng "github.com/mdhender/prng" // v1.1.0 or higher
+    rand "math/rand/v2"
+)
+
+function game_rng(src *rand.PCG):
+    return prng.New(src)
+```
 
 ```text
 # derive_child_rng produces a new PRNG for an entity.
 # It is the ONLY allowed method to create entity-local PRNGs.
-# parent_rng MUST provide Uint64() -> uint64
 
 function derive_child_rng(parent_rng):
-    # This function MUST consume exactly two Uint64 values from parent_rng, in this order.
-    seed := parent_rng.Uint64()
-    seq  := parent_rng.Uint64()
-
-    # seq MUST be odd for PCG stream selection.
-    # Force odd deterministically.
-    seq := seq BITOR 1
-
-    return NewPCG(seed, seq)
+    return parent_rng.Child()
 ```
 
 ```text
@@ -429,13 +435,11 @@ function sample_truncated_plummer_candidate(rng, maxRadius, preset):
 ############################
 
 # Go note (normative intent):
-# - For deterministic shuffling, a *rand.Rand must be created using the PCG source:
-#     r := rand.New(rng)
-#     r.Shuffle(...)
-# In this reference pseudocode we express this behavior via the system-local PRNG and Shuffle.
+# - Seiicho generators use *prng.Rand from github.com/mdhender/prng.
+# - Deterministic shuffling MUST use rng.Shuffle(...) on that instance.
 
 function GenerateClusterPlummerInt(
-    rng,                       # *rand.Rand from math/rand/v2, backed by PCG
+    rng,                       # *prng.Rand backed by *rand.PCG
     numberOfSystemsToGenerate,  # N
     maxRadius,                 # float64
     minSep,                    # float64 (in integer-grid units after quantization)
@@ -487,12 +491,11 @@ function GenerateClusterPlummerInt(
                 occupied: all_false
             }
 
+            # Generate planets deterministically for this system using sys_rng.
+            generate_planets_for_system(sys, sys_rng)
+
             systems.append(sys)
             break
-
-    # After systems exist, generate planets deterministically per system (below).
-    for each sys in systems:
-        generate_planets_for_system(sys, derive_child_rng(rng))
 
     return systems
 
@@ -517,8 +520,8 @@ function roll_3d4_minus_2(rng):
 # Planets are generated at the system level, then assigned to stars/orbits.
 # Only occupied orbits become planets; empty orbits are implicit.
 
-function generate_planets_for_system(sys System, sys_rng):
-    if sys_rng == nil: panic("sys_rng is nil")
+function generate_planets_for_system(sys *System, rng):
+    if rng == nil: panic("rng is nil")
     if sys.starCount < STAR_MIN or sys.starCount > STAR_MAX: panic("invalid starCount")
 
     starCount := sys.starCount
@@ -526,7 +529,7 @@ function generate_planets_for_system(sys System, sys_rng):
     # 1) total planet count
     planetCount := 0
     for s = 1 .. starCount:
-        planetCount += roll_3d4_minus_2(sys_rng)
+        planetCount += roll_3d4_minus_2(rng)
 
     # Safety bound: cannot exceed available orbits
     if planetCount > (starCount * ORBIT_COUNT):
@@ -538,9 +541,9 @@ function generate_planets_for_system(sys System, sys_rng):
         for orbitIndex = 1 .. ORBIT_COUNT:
             candidate.append((starSeq, orbitIndex))
 
-    # 3) shuffle deterministically using sys_rng
-    # Go mapping: sys_rng.Shuffle(len(candidate), swap)
-    shuffle_in_place(candidate, sys_rng)
+    # 3) shuffle deterministically using rng
+    # Go mapping: rng.Shuffle(len(candidate), swap)
+    shuffle_in_place(candidate, rng)
 
     # 4) occupy first planetCount
     for k = 0 .. planetCount-1:
@@ -557,7 +560,7 @@ function generate_planets_for_system(sys System, sys_rng):
 
         if hasPlanet == false:
             # select one orbit uniformly at random from 1..10
-            orbitIndex := 1 + sys_rng.IntN(ORBIT_COUNT)
+            orbitIndex := 1 + rng.IntN(ORBIT_COUNT)
             sys.occupied[starSeq][orbitIndex] = true
 
 
@@ -565,11 +568,11 @@ function generate_planets_for_system(sys System, sys_rng):
 # Deterministic shuffle (Fisher–Yates)
 ############################
 
-# Equivalent to Go's rand.Shuffle using sys_rng.
-function shuffle_in_place(list, sys_rng):
+# Equivalent to Go's rand.Shuffle using rng.
+function shuffle_in_place(list, rng):
     n := length(list)
     for i = n-1 down to 1:
-        j := sys_rng.IntN(i+1)
+        j := rng.IntN(i+1)
         swap(list[i], list[j])
 
 
