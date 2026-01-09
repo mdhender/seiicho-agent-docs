@@ -250,6 +250,10 @@ to a planet identifier.
 
 30. Any identifier not conforming to the formats defined in this section is **invalid**.
 
+31. Ring index MUST be in `0..100`; otherwise parsing/generation MUST panic.
+32. Star sequence index MUST be in `1..starCount` for the system; otherwise MUST panic.
+33. Orbit letter must be `a..j` exactly; planet letter `A..J` exactly; otherwise MUST panic.
+
 ---
 
 ## Cluster Generation (Candidate)
@@ -270,7 +274,7 @@ All generation steps are **deterministic** and **PRNG-driven**.
 
 ### Cluster Location Coordinates Assignment
 
-4. The cluster is initialized with exactly 100 lattice points in [1..31]^3 such that for any two accepted points A and B:
+1. The cluster is initialized with exactly 100 lattice points in [1..31]^3 such that for any two accepted points A and B:
 
        chebyshev(A,B) > 1
 
@@ -278,7 +282,7 @@ All generation steps are **deterministic** and **PRNG-driven**.
 
        chebyshev(A,B) = max(|Ax-Bx|, |Ay-By|, |Az-Bz|).
 
-5. Candidate lattice points are produced by:
+2. Candidate lattice points are produced by:
    a. Enumerating all lattice cells in [1..31]^3 into a list of length 31^3 using the canonical encoding:
 
           id = x0 + 31*y0 + 31*31*z0
@@ -289,21 +293,21 @@ All generation steps are **deterministic** and **PRNG-driven**.
    b. Shuffling that list using rng.Shuffle (i.e., Fisher–Yates) with the provided rng.
    c. Scanning the shuffled list in order.
 
-6. All randomness used by this algorithm **MUST** come from the provided rng.
+3. All randomness used by this algorithm **MUST** come from the provided rng.
 
-7. Acceptance rule:
+4. Acceptance rule:
     - If a candidate point is within Chebyshev distance ≤ 1 of any previously accepted point, it is rejected.
     - Otherwise it is accepted.
 
    (Implementations MAY implement this rule by maintaining a blocked set and, upon accepting a point, marking its entire 3×3×3 neighborhood (Chebyshev radius 1), clipped at boundaries, as blocked.)
 
-8. The algorithm continues scanning candidates until either:
+5. The algorithm continues scanning candidates until either:
     - 100 points have been accepted (success), or
     - the candidate list is exhausted (failure).
 
-9. Failure to accept 100 points is a generation failure and **MUST** abort cluster generation by panicking.
+6. Failure to accept 100 points is a generation failure and **MUST** abort cluster generation by panicking.
 
-10. The returned 100 lattice points are ordered by acceptance order; this order defines the systems’ generation index order i = 0..99.
+7. The returned 100 lattice points are ordered by acceptance order; this order defines the systems’ generation index order i = 0..99.
 
 ### Cluster Generation Signature
 
@@ -443,18 +447,15 @@ Invariant:
 11.	Each candidate orbit MUST be uniquely identified by its `orbitIndex`.
 
 ### Orbit Shuffling
-12.	`candidateOrbits` MUST be shuffled using `star_rng.Shuffl`e (Fisher–Yates).
+12.	`candidateOrbits` MUST be shuffled using `star_rng.Shuffle` (Fisher–Yates).
 13.	The shuffle MUST be deterministic given the same `star_rng` state.
 14.	Implementations MUST NOT use any shuffle algorithm other than Fisher–Yates driven by `star_rng`.
 
 ### Planet Assignment
 15.	Planets MUST be assigned to the first `planetCount` entries in the shuffled `candidateOrbits` list.
-16.	For each planet assigned, a planet-local PRNG MUST be derived as:
-
-    planet_rng := star_rng.Child()
-
-17.	Planet-local PRNGs MUST be derived in planet generation order, which is the order of assignment from the shuffled list.
-18.	Each assigned orbit MUST be marked as occupied.
+16.	Orbit occupancy MUST be determined solely by this assignment.
+17.	Planet entities MUST be created in increasing `orbitIndex` order from `1..10`, considering only occupied orbits.
+18.	For each planet entity created, a planet-local PRNG MUST be derived as `planet_rng := star_rng.Child()` in this planet entity creation order.
 19.	All remaining orbits MUST remain empty.
 
 Invariant:
@@ -484,6 +485,9 @@ function GenerateStar(
 ---
 
 ## Orbits (Candidate)
+
+Invariant:
+* This section defines the canonical orbit index ↔ letter mapping used by Location-Based Identifiers, Star Generation, and Planet Type Assignment.
 
 ### Orbit Structure
 1.	Each star MUST have exactly 10 orbits.
@@ -572,6 +576,25 @@ Invariant:
 
 Invariant:
 * Given identical `star_rng` state and orbit occupancy, planet type assignment is deterministic.
+
+### Planet entity creation order (normative)
+```pseudocode
+# Given: occupied[1..10] boolean for a star, and star_rng already exists.
+# Create planet entities and their RNGs deterministically.
+
+function CreatePlanetsForStar(star_rng, occupied[1..10]) -> planets[]:
+    planets := []
+
+    for orbitIndex in 1..10:
+        if occupied[orbitIndex] == true:
+            planet_rng := star_rng.Child()
+            planet := new Planet()
+            planet.orbitIndex = orbitIndex
+            planet.rng = planet_rng
+            planets.append(planet)
+
+    return planets
+```
 
 ### Hard Override Rules
 9.	If a star has exactly one occupied orbit, that planet MUST be assigned the type `gas-giant`.
@@ -896,9 +919,7 @@ Invariant:
 * Moon habitability roll
 
 #### Gas Giant Habitable Gate
-22.	Gas giants MUST use half the `rocky` gate probability (rounded up):
-
-    P_gas[orbit] := P_rocky[orbit] / 2
+22. `P_gas[orbit]` MUST equal `ceil(P_rocky[orbit] / 2)` when expressed as an integer percent used with RollPercent().
 
 23.	The resulting probabilities MUST be:
 
@@ -913,6 +934,16 @@ Invariant:
 * Habitability generation for this planet MUST terminate
 
 26.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
+
+##### Gas giant gate percent (normative)
+```pseudocode
+function gas_gate_percent(P_rocky_percent):
+    return ceil_div(P_rocky_percent, 2)
+
+function ceil_div(a, b):
+    # a,b are non-negative integers, b > 0
+    return (a + b - 1) / b
+```
 
 #### Gas Giant Moon Habitability Roll
 27.	A provisional habitability value `h` MUST be computed as:
