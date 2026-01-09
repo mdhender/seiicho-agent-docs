@@ -317,7 +317,7 @@ to a planet identifier.
 
 ---
 
-## Cluster Generation (Candidate)
+## Cluster Generation (Locked)
 
 ### Overview
 
@@ -382,7 +382,7 @@ function GenerateClusterChebyshevShuffleDraw(
 
 ---
 
-## System Generation (Candidate)
+## System Generation (Locked)
 
 ### Generation Scope and Order
 1.	System generation MUST generate exactly 100 systems.
@@ -451,7 +451,7 @@ Invariant:
 
 ---
 
-## Star Generation (Candidate)
+## Star Generation (Locked)
 
 ### Scope
 1.	Star generation MUST create only the orbital structure of a star.
@@ -525,7 +525,7 @@ Invariant:
 
 ---
 
-## Orbits (Candidate)
+## Orbits (Locked)
 
 Invariant:
 * This section defines the canonical orbit index ↔ letter mapping used by Location-Based Identifiers, Star Generation, and Planet Type Assignment.
@@ -592,7 +592,7 @@ function IsOccupiedOrbit(orbitLetter):
 
 ---
 
-## Planet Type Assignment (Candidate)
+## Planet Type Assignment (Locked)
 
 ### Definitions
 1.	Orbits MUST be indexed from 1 (innermost) to 10 (outermost).
@@ -714,7 +714,7 @@ Invariant:
 
 ---
 
-## Natural Resource Deposits Generation (Candidate)
+## Natural Resource Deposits Generation (Locked)
 
 ### Scope and PRNG Usage
 1.	Natural resource deposits MUST be generated only for planets.
@@ -887,7 +887,7 @@ Asteroid-belt planets:
 
 ---
 
-## Planet Habitability Generation (Candidate)
+## Planet Habitability Generation (Locked)
 
 ### Scope and Definitions
 1.	Each planet MUST have a Habitability value.
