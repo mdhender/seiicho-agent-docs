@@ -13,11 +13,12 @@ Coordinates are integers (x, y, z), where x, y, and z range from 1 to 31.
 The center of the cluster is at (16, 16, 16).
 
 ### Systems
-The cluster has a radius of 15 parsecs and contains 100 systems.
+The "cluster" is a cube with that contains 100 systems.
+The length of each edge is 31 units.
 The game master may specify the minimum distance between systems when creating a new game.
 
 Systems are identified by their coordinates, formatted as "xx-yy-zz".
-For example, the system at (14, 8, 29) is "28-02-18."
+For example, the system at (28, 2, 18) is "28-02-18."
 
 ### Jump Points
 All systems have an entry/exit point (called the jump point) that ships must pass through.
