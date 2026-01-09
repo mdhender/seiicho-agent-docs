@@ -47,6 +47,57 @@ rng.Child() is normative and **MUST** be equivalent to `derive_child_rng(parent_
 
 11. PRNGs **MUST NOT** be re-seeded after creation.
 
+### PRNG ownership pipeline (Normative)
+```pseudocode
+function GenerateGame(sys_rng):
+    points := GenerateClusterChebyshevShuffleDraw(sys_rng)
+    systems := []
+
+    for i in 0..99:
+        sys_rng_i := sys_rng.Child()
+        system := GenerateSystem(sys_rng_i, points[i], i)
+        systems.append(system)
+
+    return systems
+
+function GenerateSystem(sys_rng_i, point, i):
+    starCount := StarCountFromIndex(i)
+    stars := []
+
+    for starSeq in 1..starCount:
+        star_rng := sys_rng_i.Child()
+        star := GenerateStar(star_rng, starSeq)
+        stars.append(star)
+
+    return System{point, stars}
+
+function GenerateStar(star_rng, starSeq):
+    planetCount := star_rng.IntN(4) + star_rng.IntN(4) + star_rng.IntN(4) + 1
+
+    candidateOrbits := [1,2,3,4,5,6,7,8,9,10]
+    star_rng.Shuffle(10, swap)
+
+    occupied := boolean[1..10] all false
+    for k in 1..planetCount:
+        occupied[candidateOrbits[k]] = true
+
+    planets := []
+    for orbitIndex in 1..10:
+        if occupied[orbitIndex]:
+            planet_rng := star_rng.Child()
+            planet := Planet{orbitIndex: orbitIndex, rng: planet_rng}
+            planets.append(planet)
+
+    # Planet Type Assignment MUST use planet.rng; MUST NOT call star_rng.Child().
+    AssignPlanetTypes(planets, occupied)
+
+    for planet in planets:
+        GenerateDeposits(planet.rng, planet.type)
+        GenerateHabitability(planet.rng, planet.type, planet.orbitIndex)
+
+    return Star{planets}
+```
+
 ---
 
 ## Location-Based Identifiers (Locked)
@@ -65,6 +116,8 @@ No identifier may depend on discovery order, sorting, or runtime state beyond th
 2. Coordinates are represented as integer triples `(x, y, z)` where:
 
     * `x`, `y`, and `z` each range from **1 to 31**, inclusive.
+
+   * The canonical enumeration order MUST be `id` increasing from `0` to `31^3-1`, which corresponds to `x` varying fastest, then `y`, then `z`.
 
 3. The center of the cluster is fixed at:
 
@@ -381,20 +434,6 @@ Invariant:
 Invariant:
 * Star-local PRNG derivation order is independent of system coordinates and depends only on generation index and star sequence.
 
-### Function Signatures (Normative)
-
-```pseudocode
-function GenerateSystems(
-    rng     # *prng.Rand
-    points  # [100]LatticePoint
-) -> systems[]
-
-function GenerateSystem(
-    sys_rng # *prng.Rand
-    point   # LatticePoint
-) -> system
-```
-
 ### Summary of Invalid-Input Behavior
 * Invalid system coordinate values MUST cause a panic.
 * Reordered, missing, or malformed points input MUST cause a panic.
@@ -455,7 +494,7 @@ Invariant:
 15.	Planets MUST be assigned to the first `planetCount` entries in the shuffled `candidateOrbits` list.
 16.	Orbit occupancy MUST be determined solely by this assignment.
 17.	Planet entities MUST be created in increasing `orbitIndex` order from `1..10`, considering only occupied orbits.
-18.	For each planet entity created, a planet-local PRNG MUST be derived as `planet_rng := star_rng.Child()` in this planet entity creation order.
+18.	For each planet entity created, a planet-local PRNG MUST be derived as `planet.rng := star_rng.Child()` in this planet entity creation order.
 19.	All remaining orbits MUST remain empty.
 
 Invariant:
@@ -466,14 +505,6 @@ Invariant:
 21.	No star MUST have more than 10 planets.
 22.	If `planetCount < 1` or `planetCount > 10`, star generation MUST panic.
 23.	Any orbit index outside `1..10` MUST be treated as invalid and MUST panic if encountered.
-
-### Function Signature (Normative)
-
-```pseudocode
-function GenerateStar(
-    star_rng # *prng.Rand
-) -> star
-```
 
 ### Summary Invariants
 * Orbit count per star is always exactly 10.
@@ -566,13 +597,10 @@ Invariant:
 * Unoccupied orbits never have a planet type.
 
 ### Generation Order and PRNG Usage
-5.	Planets MUST be processed in increasing orbit index order (`1..10`).
-6.	For each planet, a planet-local PRNG MUST be derived as:
-
-    planet_rng := star_rng.Child()
-
-7.	Planet-local PRNGs MUST be derived in planet generation order.
-8.	All randomness used for a planet (including planet type) MUST use its `planet_rng`.
+5.	Planets MUST be processed in increasing orbit index order (1..10).
+6.	Each planet entity MUST already have an assigned `planet.rng` derived during Star Generation (Rule 18 of Star Generation).
+7.	Planet type assignment MUST use `planet.rng`.
+8.	Implementations MUST NOT call `star_rng.Child()` (or any other RNG derivation) during planet type assignment.
 
 Invariant:
 * Given identical `star_rng` state and orbit occupancy, planet type assignment is deterministic.
@@ -587,10 +615,9 @@ function CreatePlanetsForStar(star_rng, occupied[1..10]) -> planets[]:
 
     for orbitIndex in 1..10:
         if occupied[orbitIndex] == true:
-            planet_rng := star_rng.Child()
             planet := new Planet()
             planet.orbitIndex = orbitIndex
-            planet.rng = planet_rng
+            planet.rng = star_rng.Child()
             planets.append(planet)
 
     return planets
@@ -622,7 +649,7 @@ Invariant:
 #### Middle Zone (Orbits 4–6)
 13.	For each occupied orbit `o` in the Middle zone, planet type MUST be assigned as follows:
 
-    if o + planet_rng.IntN(3) >= 7:
+    if o + planet.rng.IntN(3) >= 7:
         gas-giant
     else:
         rocky
@@ -681,11 +708,11 @@ Invariant:
 
 ### Scope and PRNG Usage
 1.	Natural resource deposits MUST be generated only for planets.
-2.	All randomness used in deposit generation MUST use `planet_rng`.
+2.	All randomness used in deposit generation MUST use `planet.rng`.
 3.	No other PRNG source MUST be consulted at any step.
 
 Invariant:
-* Given identical `planet_rng` state and planet type, resource generation is deterministic.
+* Given identical `planet.rng` state and planet type, resource generation is deterministic.
 
 ### Definitions and Constants
 4.	Valid resource kinds are exactly:
@@ -701,11 +728,16 @@ Invariant:
 * METALLICS, NON_METALLICS, FUEL: 1..99,999,999
 * GOLD: 1..9,999,999
 
+7. All deposit arithmetic MUST be performed using integer math.
+ 
+* floor_div(a, b) MUST return a / b for non-negative integers.
+* ceil_div(a, b) MUST return (a + b - 1) / b for non-negative integers.
+
 Invariant:
 * No generated deposit may violate its defined yield or quantity range prior to later modifiers.
 
 ### Step 1 — Deposit Count
-7.	For each planet, the number of deposits MUST be determined by exactly one roll, based on planet type:
+8.	For each planet, the number of deposits MUST be determined by exactly one roll, based on planet type:
 
 | Planet Type     | Deposit Count Rule  |
 |-----------------|---------------------|
@@ -713,11 +745,11 @@ Invariant:
 | `gas-giant`     | `1d18 + 6` (7..24)  |
 | `asteroid-belt` | `1d10 + 6` (7..16)  |
 
-8.	Deposit generation MUST create exactly this number of deposits before any later conversions.
+9. Deposit generation MUST create exactly this number of deposits before any later conversions.
 
 ### Step 2 — Deposit Kind Assignment
-9.	For each deposit, a single roll of `1d100` MUST be used to assign its resource kind.
-10.	Resource kind assignment MUST follow the exact tables below.
+10.	For each deposit, a single roll of `1d100` MUST be used to assign its resource kind.
+11.	Resource kind assignment MUST follow the exact tables below.
 
 Rocky planets:
 
@@ -747,29 +779,29 @@ Asteroid-belt planets:
 | 78–100 | NON_METALLICS  |
 
 ### Step 3 — Quantity Determination
-11.	For deposits of type METALLICS, NON_METALLICS, or FUEL, quantity MUST be determined as:
+12.	For deposits of type METALLICS, NON_METALLICS, or FUEL, quantity MUST be determined as:
 
     quantity := sum of 99 rolls of 1..1,000,000
 
-12.	For deposits of type GOLD, quantity MUST be determined as:
+13.	For deposits of type GOLD, quantity MUST be determined as:
 
     quantity := sum of 9 rolls of 1..1,000,000
 
-13.	Quantities MUST fall within the ranges defined in Rule 6 prior to modifiers.
+14.	Quantities MUST fall within the ranges defined in Rule 6 prior to modifiers.
 
 ### Step 4 — Yield Determination
-14.	Yield MUST be determined as follows:
+15.	Yield MUST be determined as follows:
 
 * METALLICS, NON_METALLICS: 1d10
 * FUEL: 1d6
 * GOLD: 1d3
 
-15.	Yield MUST be stored exactly as rolled before modifiers.
+16.	Yield MUST be stored exactly as rolled before modifiers.
 
 ### Step 5 — Planet-Type Modifiers
 
 #### 5A — GOLD on Asteroid Belts
-16.	If the planet type is `asteroid-belt` and the deposit kind is GOLD:
+17.	If the planet type is `asteroid-belt` and the deposit kind is GOLD:
 
 * A bonus percentage MUST be computed as 25 + 1d51.
 * Quantity MUST be updated as:
@@ -779,30 +811,30 @@ Asteroid-belt planets:
 * Yield MUST be set to 1.
 
 #### 5B — FUEL on Gas Giants
-17.	If the planet type is `gas-giant` and the deposit kind is FUEL:
+18.	If the planet type is `gas-giant` and the deposit kind is FUEL:
 
 * A bonus percentage MUST be computed as 1d25.
 * Quantity MUST be updated as:
 
-    quantity := ceil(quantity * (100 + bonusPct) / 100)
+    quantity := ceil_div(qty * (100+bonusPct), 100) # with overflow check
 
 #### 5C — Yield Scaling by Planet Type
-18.	After applying Rules 16–17, yield MUST be modified for all deposits as follows:
+19.	After applying Rules 16–17, yield MUST be modified for all deposits as follows:
 
-* On `asteroid-belt`: yield := ceil(yield / 3)
+* On `asteroid-belt`: yield := ceil_div(yield, 3)
 * On `gas-giant`: yield := floor(yield * 125 / 100) with a minimum of 1
 * On `rocky`: no change
 
 ### Step 6 — Caps and Conversions
-19.	Each deposit MUST have a computed value:
+20.	Each deposit MUST have a computed value:
 
     value := quantity * yield
 
-20.	Ties in value MUST be resolved by deposit generation order (earlier wins).
+21.	Ties in value MUST be resolved by deposit generation order (earlier wins).
 
 #### 6A — GOLD Cap for `rocky` and `gas-giant` planets
-21.	A `rocky` or `gas-giant` planet MUST NOT have more than 4 GOLD deposits. (Asteroid belts are not limited.)
-22.	If more than 4 GOLD deposits exist for a `rocky` or `gas-giant` planet:
+22.	A `rocky` or `gas-giant` planet MUST NOT have more than 4 GOLD deposits. (Asteroid belts are not limited.)
+23.	If more than 4 GOLD deposits exist for a `rocky` or `gas-giant` planet:
 
 * GOLD deposits MUST be sorted by (value ascending, generation order ascending).
 * Excess deposits MUST be converted as follows, using their original yield:
@@ -816,8 +848,8 @@ Asteroid-belt planets:
 * Yield after conversion MAY exceed normal yield ranges.
 
 #### 6B — FUEL Cap for `rocky` and `asteroid-belt` planets
-23.	A `rocky` or `asteroid-belt` planet MUST NOT have more than 12 FUEL deposits. (Gas giants are not limited.)
-24.	If more than 12 FUEL deposits exist for a `rocky` or `asteroid-belt` planet:
+24.	A `rocky` or `asteroid-belt` planet MUST NOT have more than 12 FUEL deposits. (Gas giants are not limited.)
+25.	If more than 12 FUEL deposits exist for a `rocky` or `asteroid-belt` planet:
 
 * FUEL deposits MUST be sorted by (value ascending, generation order ascending).
 * Excess deposits MUST be converted as:
@@ -825,12 +857,15 @@ Asteroid-belt planets:
   * yield in {2,4,6} → NON_METALLICS
 
 ### Invalid-Input Behavior
-25.	Any deposit with an undefined resource kind MUST cause generation to panic.
-26.	Any quantity or yield outside defined ranges prior to modifiers MUST cause generation to panic.
-27.	Any arithmetic overflow or underflow during quantity or yield computation MUST cause generation to panic.
+26.	Any deposit with an undefined resource kind MUST cause generation to panic.
+27.	Any `quantity` or `yield` outside defined ranges prior to modifiers MUST cause generation to panic.
+28.	Any arithmetic overflow or underflow during `quantity` or `yield` computation MUST cause generation to panic.
+
+* All intermediate computations of `quantity`, `value`, and `quantity * (100+bonusPct)` MUST be performed using at least unsigned 64-bit integer arithmetic.
+* If any multiplication/addition would overflow the chosen integer type, generation MUST panic.
 
 ### Summary Invariants
-* All randomness flows exclusively from planet_rng.
+* All randomness flows exclusively from `planet.rng`.
 * Deposit count is fixed before any conversion.
 * GOLD ≤ 4 per `rocky` or `gas-giant` planet after caps.
 * FUEL ≤ 12 per `rocky` or `asteroid-belt` planet after caps.
@@ -844,11 +879,11 @@ Asteroid-belt planets:
 ### Scope and Definitions
 1.	Each planet MUST have a Habitability value.
 2.	Habitability MUST be an integer in the inclusive range `[0..25]`.
-3.	All randomness used to generate Habitability MUST use the planet’s deterministic PRNG `planet_rng`.
+3.	All randomness used to generate Habitability MUST use the planet’s deterministic PRNG `planet.rng`.
 4.	No other PRNG source MUST be consulted.
 
 Invariant:
-* Given identical `planet_rng` state, orbit index, and planet type, Habitability is deterministic.
+* Given identical `planet.rng` state, orbit index, and planet type, Habitability is deterministic.
 
 ### Helper Functions (Normative)
 5.	`RollNdS(n, s)` MUST return the sum of `n` independent rolls of integers in `[1..s]`.
@@ -919,7 +954,7 @@ Invariant:
 * Moon habitability roll
 
 #### Gas Giant Habitable Gate
-22. `P_gas[orbit]` MUST equal `ceil(P_rocky[orbit] / 2)` when expressed as an integer percent used with RollPercent().
+22. `P_gas[orbit]` MUST equal `ceil_div(P_rocky[orbit], 2)` when expressed as an integer percent used with RollPercent().
 
 23.	The resulting probabilities MUST be:
 
@@ -969,13 +1004,13 @@ function ceil_div(a, b):
 * system coordinates,
 * star properties,
 * physical distances or geometry other than orbit index,
-* any PRNG other than planet_rng.
+* any PRNG other than `planet.rng`.
 
 33.	Habitability generation MUST depend only on:
 
 * planet type,
 * orbit index,
-* planet_rng state.
+* `planet.rng` state.
 
 ### Invalid-Input Behavior
 34.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
