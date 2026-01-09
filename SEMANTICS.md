@@ -103,8 +103,10 @@ function GenerateStar(star_rng, starSeq):
     1. Planet type assignment (if not already assigned)
     2. Natural resource deposits generation
     3. Habitability generation
-    4. Implementations MUST NOT reorder these steps for a given planet.
-    5. Implementations MUST NOT “peek ahead” by consuming `planet.rng` for later phases early.
+
+    Implementations MUST NOT reorder these steps for a given planet.
+
+    Implementations MUST NOT “peek ahead” by consuming `planet.rng` for later phases early.
  
 ---
 
@@ -908,33 +910,35 @@ Invariant:
 8.	`floor_div(a, b)` MUST return `a / b` for non-negative integers.
 9.	All habitability arithmetic MUST be integer arithmetic.
 
+10. `ceil_div(a, b)` MUST return (a + b - 1) / b for non-negative integers.
+
 ### Rocky Planet Habitability
 
 #### Two-Phase Generation
-10. Habitability for `rocky` planets MUST be generated in two phases, in order:
+11. Habitability for `rocky` planets MUST be generated in two phases, in order:
 * Habitable gate
 * Capped bell roll
 
 #### Rocky Habitable Gate
-11.	Let `orbit` be the planet’s orbit index `(1..10)`.
-12.	The `rocky` habitable gate probability `P_rocky[orbit]` MUST be defined as:
+12.	Let `orbit` be the planet’s orbit index `(1..10)`.
+13.	The `rocky` habitable gate probability `P_rocky[orbit]` MUST be defined as:
 
 | Orbit | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8 | 9 | 10 |
 |-------|----|----|----|----|----|----|----|---|---|----|
 | %     | 10 | 20 | 40 | 80 | 40 | 20 | 10 | 5 | 2 | 1  |
 
-13.	A roll `r := RollPercent()` MUST be performed.
-14.	If `r > P_rocky[orbit]`, then:
+14.	A roll `r := RollPercent()` MUST be performed.
+15.	If `r > P_rocky[orbit]`, then:
 
 * Habitability MUST be set to 0
 * Habitability generation for this planet MUST terminate
 
-15.	If `r ≤ P_rocky[orbit]`, generation MUST continue to the capped bell roll.
+16.	If `r ≤ P_rocky[orbit]`, generation MUST continue to the capped bell roll.
 
 #### Rocky Capped Bell Roll
 
 ##### Orbit Maximum
-16.	The maximum Habitability value `Hmax_rocky[orbit]` MUST be defined as:
+17.	The maximum Habitability value `Hmax_rocky[orbit]` MUST be defined as:
 
 | Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
 |-------|---|----|----|----|----|----|---|---|---|----|
@@ -942,47 +946,47 @@ Invariant:
 
 
 ##### Base Bell Roll
-17.	A base value `b` MUST be computed as:
+18.	A base value `b` MUST be computed as:
 
     b := RollNdS(3, 6) - 3
 
-18.	`b` MUST be an integer in `[0..15]`.
+19.	`b` MUST be an integer in `[0..15]`.
 
 ##### Scaling and Assignment
-19.	Let `Hmax := Hmax_rocky[orbit]`.
-20.	A provisional habitability value `h` MUST be computed as:
+20.	Let `Hmax := Hmax_rocky[orbit]`.
+21.	A provisional habitability value `h` MUST be computed as:
 
     h := floor_div(b * Hmax, 15) # with overflow check
 
-21.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
-22.	Final Habitability MUST be assigned as:
+22.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+23.	Final Habitability MUST be assigned as:
 
     Habitability := Clamp(h, 0, 25)
 
 ### Gas Giant Habitability
 
 #### Two-Phase Generation
-23.	Habitability for `gas-giant` planets MUST be generated in two phases, in order:
+24.	Habitability for `gas-giant` planets MUST be generated in two phases, in order:
 
 * Habitable gate
 * Moon habitability roll
 
 #### Gas Giant Habitable Gate
-24. `P_gas[orbit]` MUST equal `ceil_div(P_rocky[orbit], 2)` when expressed as an integer percent used with RollPercent().
+25. `P_gas[orbit]` MUST equal `ceil_div(P_rocky[orbit], 2)` when expressed as an integer percent used with RollPercent().
 
-25.	The resulting probabilities MUST be:
+26.	The resulting probabilities MUST be:
 
 | Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
 |-------|---|----|----|----|----|----|---|---|---|----|
 | %     | 5 | 10 | 20 | 40 | 20 | 10 | 5 | 3 | 1 | 1  |
 
-26.	A roll `r := RollPercent()` MUST be performed.
-27.	If r > P_gas[orbit], then:
+27.	A roll `r := RollPercent()` MUST be performed.
+28.	If r > P_gas[orbit], then:
 
 * Habitability MUST be set to 0
 * Habitability generation for this planet MUST terminate
 
-28.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
+29.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
 
 ##### Gas giant gate percent (normative)
 ```pseudocode
@@ -995,41 +999,41 @@ function ceil_div(a, b):
 ```
 
 #### Gas Giant Moon Habitability Roll
-29.	A provisional habitability value `h` MUST be computed as:
+30.	A provisional habitability value `h` MUST be computed as:
 
     h := RollNdS(2, 4) - orbit
 
-30.	If `orbit ≥ 5`, then:
+31.	If `orbit ≥ 5`, then:
 
     h := h + RollNdS(1, 4)
 
-31.	`h` MUST be clamped as:
+32.	`h` MUST be clamped as:
 
     h := Clamp(h, 0, 25)
 
-32.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
-33.	Final Habitability MUST be assigned as:
+33.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+34.	Final Habitability MUST be assigned as:
 
     Habitability := h
 
 ### Determinism and Independence Constraints
-34.	Habitability generation MUST NOT depend on:
+35.	Habitability generation MUST NOT depend on:
 
 * system coordinates,
 * star properties,
 * physical distances or geometry other than orbit index,
 * any PRNG other than `planet.rng`.
 
-35.	Habitability generation MUST depend only on:
+36.	Habitability generation MUST depend only on:
 
 * planet type,
 * orbit index,
 * `planet.rng` state.
 
 ### Invalid-Input Behavior
-36.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
-37.	Any Habitability value outside `[0..25]` after final assignment MUST cause generation to panic.
-38.	Any failure to generate required random values MUST cause generation to panic.
+37.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
+38.	Any Habitability value outside `[0..25]` after final assignment MUST cause generation to panic.
+39.	Any failure to generate required random values MUST cause generation to panic.
 
 ### Summary Invariants
 * Habitability is always an integer in `[0..25]`.
