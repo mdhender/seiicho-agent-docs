@@ -98,6 +98,14 @@ function GenerateStar(star_rng, starSeq):
     return Star{planets}
 ```
 
+### Entity PRNG Determinism (Normative)
+12. For each planet entity, generation steps that consume planet.rng MUST be invoked in the following order:
+    1. Planet type assignment (if not already assigned)
+    2. Natural resource deposits generation
+    3. Habitability generation
+    4. Implementations MUST NOT reorder these steps for a given planet.
+    5. Implementations MUST NOT “peek ahead” by consuming `planet.rng` for later phases early.
+ 
 ---
 
 ## Location-Based Identifiers (Locked)
@@ -116,8 +124,6 @@ No identifier may depend on discovery order, sorting, or runtime state beyond th
 2. Coordinates are represented as integer triples `(x, y, z)` where:
 
     * `x`, `y`, and `z` each range from **1 to 31**, inclusive.
-
-   * The canonical enumeration order MUST be `id` increasing from `0` to `31^3-1`, which corresponds to `x` varying fastest, then `y`, then `z`.
 
 3. The center of the cluster is fixed at:
 
@@ -342,6 +348,8 @@ All generation steps are **deterministic** and **PRNG-driven**.
 
    where (x0,y0,z0) are 0-based coordinates in [0..30].
    When outputting lattice points, coordinates MUST be converted to 1-based as (x0+1, y0+1, z0+1).
+
+* The canonical enumeration order MUST be `id` increasing from `0` to `31^3-1`, which corresponds to `x` varying fastest, then `y`, then `z`.
 
    b. Shuffling that list using rng.Shuffle (i.e., Fisher–Yates) with the provided rng.
    c. Scanning the shuffled list in order.
@@ -806,7 +814,7 @@ Asteroid-belt planets:
 * A bonus percentage MUST be computed as 25 + 1d51.
 * Quantity MUST be updated as:
 
-    quantity := floor(quantity * (100 + bonusPct) / 100)
+    quantity := floor_div(quantity * (100 + bonusPct), 100) # with overflow check
 
 * Yield MUST be set to 1.
 
@@ -816,13 +824,13 @@ Asteroid-belt planets:
 * A bonus percentage MUST be computed as 1d25.
 * Quantity MUST be updated as:
 
-    quantity := ceil_div(qty * (100+bonusPct), 100) # with overflow check
+    quantity := ceil_div(quantity * (100+bonusPct), 100) # with overflow check
 
 #### 5C — Yield Scaling by Planet Type
-19.	After applying Rules 16–17, yield MUST be modified for all deposits as follows:
+19.	After applying Rules 17-18, yield MUST be modified for all deposits as follows:
 
 * On `asteroid-belt`: yield := ceil_div(yield, 3)
-* On `gas-giant`: yield := floor(yield * 125 / 100) with a minimum of 1
+* On `gas-giant`: yield := floor_div(yield * 125, 100) with a minimum of 1 (with overflow check)
 * On `rocky`: no change
 
 ### Step 6 — Caps and Conversions
@@ -838,9 +846,11 @@ Asteroid-belt planets:
 
 * GOLD deposits MUST be sorted by (value ascending, generation order ascending).
 * Excess deposits MUST be converted as follows, using their original yield:
-  * yield 1 → convert to FUEL
-  * yield 2 → convert to METALLICS
-  * yield 3 → convert to NON_METALLICS
+    * yield 1 → convert to FUEL
+    * yield 2 → convert to METALLICS
+    * yield 3 → convert to NON_METALLICS
+
+* “original yield” MUST mean the deposit’s yield value after Step 5 modifiers (including any forced-yield rule and yield scaling) and immediately before Step 6 conversions.
 * Converted deposits MUST have:
 
     quantity := quantity * 10
@@ -852,9 +862,10 @@ Asteroid-belt planets:
 25.	If more than 12 FUEL deposits exist for a `rocky` or `asteroid-belt` planet:
 
 * FUEL deposits MUST be sorted by (value ascending, generation order ascending).
-* Excess deposits MUST be converted as:
-  * yield in {1,3,5} → METALLICS
-  * yield in {2,4,6} → NON_METALLICS
+* Excess deposits MUST be converted as follows, using their original yield:
+    * yield in {1,3,5} → METALLICS
+    * yield in {2,4,6} → NON_METALLICS
+* “original yield” MUST mean the deposit’s yield value after Step 5 modifiers (including any forced-yield rule and yield scaling) and immediately before Step 6 conversions.
 
 ### Invalid-Input Behavior
 26.	Any deposit with an undefined resource kind MUST cause generation to panic.
@@ -894,33 +905,36 @@ Invariant:
 * `hi` if x > hi
 * otherwise `x`
 
+8.	`floor_div(a, b)` MUST return `a / b` for non-negative integers.
+9.	All habitability arithmetic MUST be integer arithmetic.
+
 ### Rocky Planet Habitability
 
 #### Two-Phase Generation
-8.	Habitability for `rocky` planets MUST be generated in two phases, in order:
+10. Habitability for `rocky` planets MUST be generated in two phases, in order:
 * Habitable gate
 * Capped bell roll
 
 #### Rocky Habitable Gate
-9.	Let `orbit` be the planet’s orbit index `(1..10)`.
-10.	The `rocky` habitable gate probability `P_rocky[orbit]` MUST be defined as:
+11.	Let `orbit` be the planet’s orbit index `(1..10)`.
+12.	The `rocky` habitable gate probability `P_rocky[orbit]` MUST be defined as:
 
 | Orbit | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8 | 9 | 10 |
 |-------|----|----|----|----|----|----|----|---|---|----|
 | %     | 10 | 20 | 40 | 80 | 40 | 20 | 10 | 5 | 2 | 1  |
 
-11.	A roll `r := RollPercent()` MUST be performed.
-12.	If `r > P_rocky[orbit]`, then:
+13.	A roll `r := RollPercent()` MUST be performed.
+14.	If `r > P_rocky[orbit]`, then:
 
 * Habitability MUST be set to 0
 * Habitability generation for this planet MUST terminate
 
-13.	If `r ≤ P_rocky[orbit]`, generation MUST continue to the capped bell roll.
+15.	If `r ≤ P_rocky[orbit]`, generation MUST continue to the capped bell roll.
 
 #### Rocky Capped Bell Roll
 
 ##### Orbit Maximum
-14.	The maximum Habitability value `Hmax_rocky[orbit]` MUST be defined as:
+16.	The maximum Habitability value `Hmax_rocky[orbit]` MUST be defined as:
 
 | Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
 |-------|---|----|----|----|----|----|---|---|---|----|
@@ -928,47 +942,47 @@ Invariant:
 
 
 ##### Base Bell Roll
-15.	A base value `b` MUST be computed as:
+17.	A base value `b` MUST be computed as:
 
     b := RollNdS(3, 6) - 3
 
-16.	`b` MUST be an integer in `[0..15]`.
+18.	`b` MUST be an integer in `[0..15]`.
 
 ##### Scaling and Assignment
-17.	Let `Hmax := Hmax_rocky[orbit]`.
-18.	A provisional habitability value `h` MUST be computed as:
+19.	Let `Hmax := Hmax_rocky[orbit]`.
+20.	A provisional habitability value `h` MUST be computed as:
 
-    h := floor(b * Hmax / 15)
+    h := floor_div(b * Hmax, 15) # with overflow check
 
-19.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
-20.	Final Habitability MUST be assigned as:
+21.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+22.	Final Habitability MUST be assigned as:
 
     Habitability := Clamp(h, 0, 25)
 
 ### Gas Giant Habitability
 
 #### Two-Phase Generation
-21.	Habitability for `gas-giant` planets MUST be generated in two phases, in order:
+23.	Habitability for `gas-giant` planets MUST be generated in two phases, in order:
 
 * Habitable gate
 * Moon habitability roll
 
 #### Gas Giant Habitable Gate
-22. `P_gas[orbit]` MUST equal `ceil_div(P_rocky[orbit], 2)` when expressed as an integer percent used with RollPercent().
+24. `P_gas[orbit]` MUST equal `ceil_div(P_rocky[orbit], 2)` when expressed as an integer percent used with RollPercent().
 
-23.	The resulting probabilities MUST be:
+25.	The resulting probabilities MUST be:
 
 | Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
 |-------|---|----|----|----|----|----|---|---|---|----|
 | %     | 5 | 10 | 20 | 40 | 20 | 10 | 5 | 3 | 1 | 1  |
 
-24.	A roll `r := RollPercent()` MUST be performed.
-25.	If r > P_gas[orbit], then:
+26.	A roll `r := RollPercent()` MUST be performed.
+27.	If r > P_gas[orbit], then:
 
 * Habitability MUST be set to 0
 * Habitability generation for this planet MUST terminate
 
-26.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
+28.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
 
 ##### Gas giant gate percent (normative)
 ```pseudocode
@@ -981,41 +995,41 @@ function ceil_div(a, b):
 ```
 
 #### Gas Giant Moon Habitability Roll
-27.	A provisional habitability value `h` MUST be computed as:
+29.	A provisional habitability value `h` MUST be computed as:
 
     h := RollNdS(2, 4) - orbit
 
-28.	If `orbit ≥ 5`, then:
+30.	If `orbit ≥ 5`, then:
 
     h := h + RollNdS(1, 4)
 
-29.	`h` MUST be clamped as:
+31.	`h` MUST be clamped as:
 
     h := Clamp(h, 0, 25)
 
-30.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
-31.	Final Habitability MUST be assigned as:
+32.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+33.	Final Habitability MUST be assigned as:
 
     Habitability := h
 
 ### Determinism and Independence Constraints
-32.	Habitability generation MUST NOT depend on:
+34.	Habitability generation MUST NOT depend on:
 
 * system coordinates,
 * star properties,
 * physical distances or geometry other than orbit index,
 * any PRNG other than `planet.rng`.
 
-33.	Habitability generation MUST depend only on:
+35.	Habitability generation MUST depend only on:
 
 * planet type,
 * orbit index,
 * `planet.rng` state.
 
 ### Invalid-Input Behavior
-34.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
-35.	Any Habitability value outside `[0..25]` after final assignment MUST cause generation to panic.
-36.	Any failure to generate required random values MUST cause generation to panic.
+36.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
+37.	Any Habitability value outside `[0..25]` after final assignment MUST cause generation to panic.
+38.	Any failure to generate required random values MUST cause generation to panic.
 
 ### Summary Invariants
 * Habitability is always an integer in `[0..25]`.
