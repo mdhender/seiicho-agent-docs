@@ -630,3 +630,242 @@ If you want, next we can:
 
 Just say so.
 
+----
+
+Here’s a **short, repo-ready section** you can drop straight into a README or CONTRIBUTING.md. It’s written to be clear, opinionated, and future-proof for *future you* (and any collaborators).
+
+---
+
+## Working with ChatGPT
+
+This repository uses ChatGPT as a **specification assistant and compiler**, not as a source of truth or a file editor. To avoid ambiguity and tool limitations, follow the rules below.
+
+### Source of Truth
+
+* **GitHub is authoritative.**
+* ChatGPT does **not** reliably read from repositories, links, or IDE tabs.
+* Never assume ChatGPT has access to any file unless its contents are explicitly provided.
+
+### Providing Context
+
+* **Always paste file contents** when correctness matters.
+* Wrap pasted text in clear guard lines:
+
+```text
+=== BEGIN FILE: SEMANTICS.md ===
+...
+=== END FILE ===
+```
+
+* For partial edits, paste only the relevant section and label it clearly.
+
+### Requesting Changes
+
+* **Never ask ChatGPT to “edit the file.”**
+* Always request **replacement blocks** for specific sections.
+
+Example:
+
+```text
+TASK:
+Produce a replacement block for §3.2 “Orbit Index Mapping”.
+Do not modify any other sections.
+Use normative language (MUST / MUST NOT).
+```
+
+ChatGPT should respond with a self-contained block suitable for manual insertion.
+
+### Canon and Invariants
+
+* Treat pasted text as **canonical** unless stated otherwise.
+* Explicitly mark invariants and fixed mappings.
+* ChatGPT should not infer, extrapolate, or “helpfully improve” canon without being asked.
+
+### File Uploads
+
+* Drag-and-drop uploads may be used for:
+
+    * Large, stable drafts
+    * Review, summarization, or sanity-checking
+* Do **not** rely on uploads for precise edits or canonical definitions.
+
+### Workflow Summary
+
+* Paste → Generate → Review → Commit
+* ChatGPT proposes; humans decide.
+* All final edits are applied manually in Git.
+
+This discipline keeps the specification deterministic, reviewable, and resistant to tool or platform changes.
+
+---
+
+If you want, I can also:
+
+* Tighten this further for a `CONTRIBUTING.md`
+* Add a **“Normative Language”** subsection (RFC-style)
+* Write a **ChatGPT Charter** specifically for Seiicho agents
+
+Just say which direction to take it.
+
+----
+
+## Doc → Spec → Reference promotion pipeline
+
+This repo treats “documentation” as a staged pipeline. Text starts as exploratory notes, gets promoted into normative specification language, and finally becomes executable-style reference material.
+
+### Stages
+
+**Stage 0 — Notes (DOC)**
+
+* Purpose: capture ideas, alternatives, questions, and examples.
+* Tone: informal; may include TODOs, open questions, “maybe,” and competing options.
+* Allowed: ambiguity, multiple approaches, narrative explanation.
+* Not allowed: declaring canon without marking it as such.
+
+**Stage 1 — Specification (SPEC / SEMANTICS)**
+
+* Purpose: define *canon* and invariants.
+* Tone: normative, deterministic, reviewable.
+* Language: MUST / MUST NOT / SHOULD / MAY.
+* Structure:
+
+    * numbered rules
+    * explicit inputs/outputs
+    * explicitly stated invariants
+    * error/invalid-input behavior (panic/return error/etc.)
+* Required: each rule is testable (or at least falsifiable) against an implementation.
+
+**Stage 2 — Reference (REFERENCE)**
+
+* Purpose: provide “executable-style” pseudocode and canonical mappings suitable for implementation.
+* Tone: minimal prose; high precision.
+* Contents:
+
+    * pseudocode blocks only (or near-only)
+    * canonical tables/mappings (index ↔ letter, enums, ranges)
+    * algorithm order and RNG derivation spelled out
+* Required: matches SPEC exactly; no new rules introduced here.
+
+---
+
+## Promotion criteria
+
+### DOC → SPEC checklist
+
+Promote content only when:
+
+* The team agrees on **one** behavior (canon), not multiple options.
+* Inputs, outputs, and ranges are fully defined.
+* “Edge cases” are decided (invalid coordinates, overflow, empty lists, etc.).
+* The rule can be tested or verified with fixtures.
+* Any randomness is fully specified (seed, child RNG derivation, ordering).
+
+**Promotion artifact:** a SPEC section with:
+
+* a short heading
+* numbered normative rules
+* explicit invariants
+* defined failure behavior
+
+### SPEC → REFERENCE checklist
+
+Promote content only when:
+
+* The SPEC text is stable enough to implement.
+* The algorithm can be expressed as deterministic pseudocode.
+* All mappings (letters, indices, ranges) are fixed.
+* Order-dependence is explicit (iteration order, acceptance order, sorting rules).
+
+**Promotion artifact:** a REFERENCE section with:
+
+* canonical pseudocode
+* exact variable names / step order
+* zero new behavior beyond SPEC
+
+---
+
+## Change control
+
+### “Canon only changes via SPEC”
+
+* Any behavior change MUST be made in SPEC first.
+* REFERENCE is updated *after* SPEC, as a mechanical translation.
+* DOC can propose changes, but does not change canon.
+
+### Versioning and review gates
+
+* **DOC changes**: lightweight review.
+* **SPEC changes**: require explicit review and sign-off (treat like code behavior).
+* **REFERENCE changes**: verify it is a faithful transcription of SPEC (diff check).
+
+Suggested PR labels:
+
+* `docs-notes` (DOC)
+* `spec-change` (SEMANTICS / canon)
+* `reference-sync` (REFERENCE mechanical update)
+
+---
+
+## How to use ChatGPT in the pipeline
+
+### For DOC (Notes)
+
+* Ask for options, tradeoffs, examples, diagrams, and naming.
+* Output is allowed to be exploratory.
+
+### For SPEC (Canon)
+
+* Paste the relevant DOC excerpt and ask ChatGPT to:
+
+    * rewrite as numbered MUST/MUST NOT rules
+    * explicitly state invariants and invalid-input behavior
+    * avoid introducing new behavior
+* 
+* Require replacement blocks.
+
+### For REFERENCE (Executable pseudocode)
+
+* Paste the SPEC section and ask ChatGPT to:
+
+    * translate into pseudocode blocks only
+    * keep algorithm order identical
+    * avoid prose and avoid new rules
+* Require replacement blocks.
+
+---
+
+## Operational workflow (repeatable)
+
+1. **Draft in DOC**
+
+    * Capture ideas and examples.
+2. **Decide canon**
+
+    * Resolve options; pick one.
+3. **Promote to SPEC**
+
+    * Convert to normative rules; lock invariants.
+4. **Implement / test**
+
+    * Add fixtures that encode the SPEC.
+5. **Promote to REFERENCE**
+
+    * Translate SPEC → pseudocode + mappings.
+6. **Sync and verify**
+
+    * Ensure REFERENCE matches SPEC; no drift.
+
+---
+
+## “Drift prevention” rule
+
+If SPEC and REFERENCE disagree:
+
+* SPEC wins.
+* REFERENCE must be updated immediately.
+* If implementation matches REFERENCE but not SPEC, treat as a bug unless the SPEC is intentionally being changed.
+
+---
+
+If you want, I can also produce a **ready-to-paste markdown section** tailored to your current file names (e.g., `RULEBOOK.md`, `SEMANTICS.md`, `REFERENCE.md`) and add a tiny “promotion PR template” you can copy into GitHub PR descriptions.
+

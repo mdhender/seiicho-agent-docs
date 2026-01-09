@@ -58,8 +58,6 @@ Identifiers are **canonical, deterministic, and stable** once assigned.
 
 No identifier may depend on discovery order, sorting, or runtime state beyond the rules defined here.
 
----
-
 ### Coordinate Space
 
 1. The cluster coordinate space is a three-dimensional integer grid.
@@ -73,8 +71,6 @@ No identifier may depend on discovery order, sorting, or runtime state beyond th
    ```
    (16, 16, 16)
    ```
-
----
 
 ### System Identifiers
 
@@ -98,8 +94,6 @@ No identifier may depend on discovery order, sorting, or runtime state beyond th
       "14-08-29"
       ```
 
----
-
 ### System Jump Point
 
 7. Every system has exactly one **entry/exit point**, called the **jump point**.
@@ -117,8 +111,6 @@ No identifier may depend on discovery order, sorting, or runtime state beyond th
       ```
       "14-08-29/0"
       ```
-
----
 
 ### Star Identifiers
 
@@ -146,8 +138,6 @@ where `n ∈ {1, 2, 3, 4}`.
   ```
   "28-02-18/2"
   ```
-
----
 
 ### Orbit Identifiers
 
@@ -183,8 +173,6 @@ j → 10th orbit
   "28-02-18/1i"
   ```
 
----
-
 ### Planet Identifiers
 
 19. An orbit **may contain at most one planet**.
@@ -219,8 +207,6 @@ j ↔ J
   "28-02-18/1I"
   ```
 
----
-
 ### Orbital Rings
 
 24. Orbital rings represent relative distance from a planet’s surface.
@@ -250,8 +236,6 @@ to a planet identifier.
   "28-02-18/1A+42"
   ```
 
----
-
 ### Identifier Constraints
 
 28. Identifier components are **case-sensitive**:
@@ -268,7 +252,7 @@ to a planet identifier.
 
 ---
 
-## Cluster Generation (Draft)
+## Cluster Generation (Candidate)
 
 ### Overview
 
@@ -331,182 +315,222 @@ function GenerateClusterChebyshevShuffleDraw(
 
 ---
 
-## System Generation (Draft)
+## System Generation (Candidate)
 
-### Generation Order
+### Generation Scope and Order
+1.	System generation MUST generate exactly 100 systems.
+2.	Systems MUST be generated in generation index order `i = 0..99`.
+3.	System generation MUST consume cluster output as an input array points `[100]LatticePoint`, provided in acceptance order.
+4.	System `i` MUST use coordinates from `points[i]`.
+5.	Implementations MUST NOT reorder, sort, filter, or otherwise permute points.
 
-1. Generate `N` systems.
-2. Systems are generated in **generation index order** by drawing from the cluster's list of lattice points until it is exhausted:
+### System Coordinate Assignment
+6.	Each system MUST be assigned a unique 3D location equal to `points[i]`.
+7.	Each coordinate component `(X, Y, Z)` MUST be an integer in the inclusive range `[1..31]`.
+8.	If any coordinate component is outside `[1..31]`, system generation MUST panic.
 
-   ```
-   i = 0 .. len(points)-1
-   ```
+Invariant:
+* All system locations are unique.
+* System locations are entirely determined by cluster generation output and generation index.
 
----
+### System PRNG Derivation
+9.	For each system `i`, a system-local PRNG MUST be derived as:
+
+    sys_rng := rng.Child()
+
+10.	System-local PRNGs MUST be derived in generation index order `i = 0..99`.
+11.	All randomness associated with a system MUST be generated using `sys_rng` or PRNGs derived from it.
+12.	Implementations MUST NOT consume randomness for a system from the root `rng` after `sys_rng` has been derived.
+
+Invariant:
+* Given identical input rng state and identical points, the sequence of sys_rng instances is identical.
 
 ### Star Count per System
-
-11. The number of stars in a system is determined solely by its generation index `i`:
+13.	The number of stars in a system MUST be determined solely by the system’s generation index `i`, according to the following fixed mapping:
 
 | Generation Index `i` | Star Count |
-| -------------------- | ---------- |
+|----------------------|------------|
 | `i == 0`             | 4          |
 | `1 ≤ i ≤ 8`          | 3          |
 | `9 ≤ i ≤ 24`         | 2          |
 | `i ≥ 25`             | 1          |
 
-This mapping is **fixed and invariant**.
+14.	This mapping is fixed, invariant, and MUST NOT change based on:
 
----
+* system coordinates,
+* PRNG state,
+* star properties,
+* or any other game state.
 
-### System Coordinate Assignment
+Invariant:
+* For a given generation index `i`, star count is always identical across runs.
 
-3. Each system is assigned a unique 3D location drawn from the list of lattice points in the cluster.
+### Star PRNG Derivation
+15.	For each star in a system, a star-local PRNG MUST be derived as:
 
+    star_rng := sys_rng.Child()
 
----
+16.	Star-local PRNGs MUST be derived in star sequence order `1..starCount`.
+17.	All randomness associated with a star (including star properties and star-local generation) MUST use `star_rng`.
+18.	Implementations MUST NOT derive star-local PRNGs from the root `rng`.
 
-### System Generation Signature
+Invariant:
+* Star-local PRNG derivation order is independent of system coordinates and depends only on generation index and star sequence.
+
+### Function Signatures (Normative)
 
 ```pseudocode
 function GenerateSystems(
-    rng,
-    points [100]LatticePoint,
-) -> (systems[], error)
+    rng     # *prng.Rand
+    points  # [100]LatticePoint
+) -> systems[]
+
+function GenerateSystem(
+    sys_rng # *prng.Rand
+    point   # LatticePoint
+) -> system
 ```
+
+### Summary of Invalid-Input Behavior
+* Invalid system coordinate values MUST cause a panic.
+* Reordered, missing, or malformed points input MUST cause a panic.
+* Any deviation from the specified PRNG derivation order violates determinism and is non-conformant.
 
 ---
 
-## Planet Distribution Across Stars and Orbits
+## Star Generation (Candidate)
 
-### Overview
+### Scope
+1.	Star generation MUST create only the orbital structure of a star.
+2.	Star physical characteristics (including but not limited to temperature, mass, color, luminosity) MUST NOT be generated and MUST NOT affect gameplay.
 
-Planets are generated **at the system level** and then assigned to specific stars and orbits in a deterministic manner.
+Invariant:
+* Star generation affects only orbit and planet placement.
 
-Only **occupied orbits** are instantiated as planet entities.
-Empty orbits are implicit and not stored.
+### Orbit Definitions
+3.	Each star MUST have exactly 10 orbits, indexed 1..10.
+4.	Orbit indices MUST map canonically to letters as follows:
 
----
+    1  → a / A
+    2  → b / B
+    …
+    10 → j / J
 
-### Definitions
+5.	Lowercase letters MUST denote empty orbits.
+6.	Uppercase letters MUST denote occupied orbits (planets).
+7.	Empty orbits are implicit and MUST NOT be stored as entities.
 
-1. Each star has **exactly 10 orbits**, indexed `1..10`.
-2. Orbit indices map canonically to letters:
-
-```
-1 → a / A
-2 → b / B
-…
-10 → j / J
-```
-
-Lowercase letters denote **empty orbits**.
-Uppercase letters denote **occupied orbits (planets)**.
-
----
+Invariant:
+* Orbit index ↔ letter mapping is fixed and invariant across all stars and systems.
 
 ### Planet Count Determination
+8.	The number of occupied orbits (`planetCount`) for a star MUST be determined using the star’s PRNG as:
 
-3. Let `starCount` be the number of stars in the system.
+    planetCount := star_rng.IntN(4) + star_rng.IntN(4) + star_rng.IntN(4) + 1
 
-4. The total number of planets for the system is determined as follows:
+9.	The resulting `planetCount` MUST be in the inclusive range `1..10`.
 
-```pseudocode
-planetCount := 0
-for s = 1 .. starCount:
-    planetCount += (3d4 - 2)
-```
-
-5. Per-star planet contribution range:
-
-    * minimum: `1`
-    * maximum: `10`
-
-6. Total planet count range per system:
-
-   ```
-   starCount .. (starCount × 10)
-   ```
-
----
+Invariant:
+* Given identical `star_rng` state, `planetCount` is identical across runs.
 
 ### Candidate Orbit Construction
+10.	Star generation MUST construct a list of candidate orbits containing exactly one entry for each orbit index `1..10`.
 
-7. Construct a list of candidate orbits:
-
-```pseudocode
-candidateOrbits := []
-for starSeq = 1 .. starCount:
+    candidateOrbits := []
     for orbitIndex = 1 .. 10:
-        candidateOrbits.append((starSeq, orbitIndex))
-```
+        candidateOrbits.append(orbitIndex)
 
-Each candidate orbit is uniquely identified by `(starSeq, orbitIndex)`.
-
----
+11.	Each candidate orbit MUST be uniquely identified by its `orbitIndex`.
 
 ### Orbit Shuffling
-
-8. Shuffle `candidateOrbits` using the **system’s PRNG**.
-
-9. The shuffle **MUST be deterministic** given the same PRNG state.
-
----
+12.	`candidateOrbits` MUST be shuffled using `star_rng.Shuffl`e (Fisher–Yates).
+13.	The shuffle MUST be deterministic given the same `star_rng` state.
+14.	Implementations MUST NOT use any shuffle algorithm other than Fisher–Yates driven by `star_rng`.
 
 ### Planet Assignment
+15.	Planets MUST be assigned to the first `planetCount` entries in the shuffled `candidateOrbits` list.
+16.	For each planet assigned, a planet-local PRNG MUST be derived as:
 
-10. Assign planets to the **first `planetCount` entries** in the shuffled candidate-orbit list.
+    planet_rng := star_rng.Child()
 
-11. Each assigned orbit is marked as **occupied**.
+17.	Planet-local PRNGs MUST be derived in planet generation order, which is the order of assignment from the shuffled list.
+18.	Each assigned orbit MUST be marked as occupied.
+19.	All remaining orbits MUST remain empty.
 
-12. All remaining orbits remain empty.
+Invariant:
+* Planet placement depends only on `star_rng` state and orbit indices, not on system location or other stars.
 
----
+### Constraints and Invalid-Input Behavior
+20.	Every star MUST have at least one planet.
+21.	No star MUST have more than 10 planets.
+22.	If `planetCount < 1` or `planetCount > 10`, star generation MUST panic.
+23.	Any orbit index outside `1..10` MUST be treated as invalid and MUST panic if encountered.
 
-### Star Coverage Correction
+### Function Signature (Normative)
 
-13. After assignment, verify that **each star has at least one occupied orbit**.
+```pseudocode
+function GenerateStar(
+    star_rng # *prng.Rand
+) -> star
+```
 
-14. For any star with zero planets:
-
-* Select **one orbit at random** using the system PRNG.
-* Mark it as occupied.
-* All other orbits for that star remain unchanged.
-
----
-
-### Constraints
-
-15. All stars **MUST** have at least one planet.
-
-16. A star **MUST NOT** have more than 10 planets.
-
-17. If `planetCount` exceeds the total number of available orbits:
-
-* This is a **generation error**.
-* Cluster generation **MUST fail**.
-
----
-
-### Determinism Guarantees
-
-18. Planet placement **MUST NOT** depend on:
-
-* system coordinates,
-* star properties,
-* orbit geometry.
-
-19. Planet placement **MUST depend only on**:
-
-* input PRNG state,
-* number of stars in the system,
-* `planetCount`.
-
-This guarantees replayable, identical planet layouts for identical inputs.
+### Summary Invariants
+* Orbit count per star is always exactly 10.
+* Planet count per star is always in the range `1..10`.
+* Orbit index ↔ letter mapping is fixed and invariant.
+* All randomness flows strictly from `star_rng` and its derived child PRNGs.
+* Given identical `star_rng` state, star generation is fully deterministic.
 
 ---
 
-### Orbit Occupancy Test
+## Orbits (Candidate)
+
+### Orbit Structure
+1.	Each star MUST have exactly 10 orbits.
+2.	Orbits MUST be indexed using integers in the inclusive range `1..10`.
+3.	Orbit indices MUST map canonically to letters as follows:
+
+    1  → a / A
+    2  → b / B
+    …
+    10 → j / J
+
+4.	Lowercase letters MUST denote empty orbits.
+5.	Uppercase letters MUST denote occupied orbits.
+6.	An occupied orbit MUST be considered a planet.
+
+Invariant:
+* The number of orbits per star is always exactly 10.
+
+### Canonical Encoding Rules
+7.	Orbit index → letter mapping MUST be fixed and invariant.
+8.	Orbit occupancy MUST be encoded solely by letter casing.
+9.	Implementations MUST NOT encode orbit occupancy using:
+* additional flags,
+* numeric annotations,
+* or any mechanism other than letter casing.
+
+Invariant:
+* Given the same orbit index and occupancy state, the encoded orbit letter is always identical.
+
+### Independence Constraints
+10.	Orbit index assignment and letter mapping MUST NOT depend on:
+* star type,
+* system location,
+* planet type,
+* PRNG state,
+* generation order,
+* or any other game state.
+
+Invariant:
+* Orbit identity and representation are independent of all non-orbit properties.
+
+### Invalid-Input Behavior
+11.	Any orbit index outside the inclusive range `1..10` MUST be treated as invalid and MUST cause generation to panic.
+12.	Any orbit letter outside the sets `'a'..'j'` or `'A'..'J'` MUST be treated as invalid and MUST cause generation to panic.
+13.	Any orbit letter that is not a single ASCII character MUST be treated as invalid and MUST cause generation to panic.
+
+### Orbit Occupancy Test (Normative)
 
 ```pseudocode
 function IsOccupiedOrbit(orbitLetter):
@@ -514,27 +538,424 @@ function IsOccupiedOrbit(orbitLetter):
     return orbitLetter is uppercase
 ```
 
+### Summary Invariants
+* Each star has exactly 10 orbits.
+* Orbit indices are always `1..10`.
+* Orbit occupancy is represented exclusively by letter casing.
+* Orbit representation is fully deterministic and context-independent.
+* Invalid orbit indices or letters always cause generation to panic.
+
 ---
 
-### Canonical Properties
+## Planet Type Assignment (Candidate)
 
-20. Orbit index → letter mapping is fixed and invariant.
+### Definitions
+1.	Orbits MUST be indexed from 1 (innermost) to 10 (outermost).
+2.	Only occupied orbits MUST receive a planet type.
+3.	Valid planet types are exactly:
+* rocky
+* gas-giant
+* asteroid-belt
+4.	An occupied orbit together with an assigned planet type MUST be considered a planet.
 
-21. Orbit occupancy is encoded **solely by letter casing**.
+Invariant:
+* Unoccupied orbits never have a planet type.
 
-22. Orbit index and letter mapping **MUST NOT** depend on:
+### Generation Order and PRNG Usage
+5.	Planets MUST be processed in increasing orbit index order (`1..10`).
+6.	For each planet, a planet-local PRNG MUST be derived as:
 
-* star type,
-* system location,
+    planet_rng := star_rng.Child()
+
+7.	Planet-local PRNGs MUST be derived in planet generation order.
+8.	All randomness used for a planet (including planet type) MUST use its `planet_rng`.
+
+Invariant:
+* Given identical `star_rng` state and orbit occupancy, planet type assignment is deterministic.
+
+### Hard Override Rules
+9.	If a star has exactly one occupied orbit, that planet MUST be assigned the type `gas-giant`.
+10.	When Rule 9 applies, no further planet-type rules MUST be evaluated for that star.
+
+### Zone Classification
+11.	Orbits MUST be classified into zones by orbit index:
+
+| Orbit Index | Zone   |
+|-------------|--------|
+| 1..3        | Inner  |
+| 4..6        | Middle |
+| 7..10       | Outer  |
+
+Invariant:
+* Zone boundaries are fixed and invariant.
+
+### Planet Type Assignment Rules
+
+(Applied only if Rule 9 does not apply)
+
+#### Inner Zone (Orbits 1–3)
+12.	Any occupied orbit in the Inner zone MUST be assigned type `rocky`.
+
+#### Middle Zone (Orbits 4–6)
+13.	For each occupied orbit `o` in the Middle zone, planet type MUST be assigned as follows:
+
+    if o + planet_rng.IntN(3) >= 7:
+        gas-giant
+    else:
+        rocky
+
+#### Outer Zone (Orbits 7–10)
+14.	The default planet type for an occupied orbit in the Outer zone MUST be `gas-giant`.
+15.	If an occupied orbit `o` in the Outer zone has its next inner orbit (`o-1`) unoccupied, then orbit `o` MUST be assigned type `asteroid-belt` instead.
+
+Invariant:
+* Outer-zone asteroid belts arise only from adjacency to an empty inner orbit.
+
+### Sanity Constraints (Post-Assignment Corrections)
+
+#### Asteroid Belt Limit
+16.	A star MUST NOT have more than 2 asteroid belts.
+17.	If more than 2 asteroid belts are assigned:
+
+* Excess belts MUST be converted in increasing orbit index order.
+* If the orbit index is ≥ 9, the belt MUST be converted to `gas-giant`.
+* Otherwise, it MUST be converted to `rocky`.
+
+### Variety Guarantee
+18.	If a star has 3 or more planets and no `rocky` planets, the innermost occupied orbit MUST be reassigned to type `rocky`.
+
+### Determinism and Independence Constraints
+19.	Planet type assignment MUST NOT depend on:
+
+* system coordinates,
+* star physical properties,
+* absolute distances or geometry beyond orbit index and adjacency.
+
+20.	Planet type assignment MUST depend only on:
+
+* input PRNG state,
+* orbit index,
+* orbit occupancy,
+* neighboring orbit occupancy.
+
+Invariant:
+* Two implementations with identical inputs and PRNG state produce identical planet types.
+
+### Invalid-Input Behavior
+21.	Any occupied orbit index outside `1..10` MUST cause planet type assignment to panic.
+22.	Any planet type outside the defined set {`rocky`, `gas-giant`, `asteroid-belt`} MUST cause generation to panic.
+
+### Summary Invariants
+* Planet types are assigned only to occupied orbits.
+* Inner-zone planets are always `rocky` (unless overridden by single-planet rule).
+* Outer-zone belts arise only from gaps.
+* No star has more than two asteroid belts.
+* Determinism is guaranteed by strict PRNG usage and fixed rule order.
+
+---
+
+## Natural Resource Deposits Generation (Candidate)
+
+### Scope and PRNG Usage
+1.	Natural resource deposits MUST be generated only for planets.
+2.	All randomness used in deposit generation MUST use `planet_rng`.
+3.	No other PRNG source MUST be consulted at any step.
+
+Invariant:
+* Given identical `planet_rng` state and planet type, resource generation is deterministic.
+
+### Definitions and Constants
+4.	Valid resource kinds are exactly:
+* METALLICS
+* NON_METALLICS
+* FUEL
+* GOLD
+5.	Valid yield ranges MUST be:
+* METALLICS, NON_METALLICS: 1..10
+* FUEL: 1..6
+* GOLD: 1..3
+6.	Valid quantity ranges MUST be:
+* METALLICS, NON_METALLICS, FUEL: 1..99,999,999
+* GOLD: 1..9,999,999
+
+Invariant:
+* No generated deposit may violate its defined yield or quantity range prior to later modifiers.
+
+### Step 1 — Deposit Count
+7.	For each planet, the number of deposits MUST be determined by exactly one roll, based on planet type:
+
+| Planet Type     | Deposit Count Rule  |
+|-----------------|---------------------|
+| `rocky`         | `1d12 + 2` (3..14)  |
+| `gas-giant`     | `1d18 + 6` (7..24)  |
+| `asteroid-belt` | `1d10 + 6` (7..16)  |
+
+8.	Deposit generation MUST create exactly this number of deposits before any later conversions.
+
+### Step 2 — Deposit Kind Assignment
+9.	For each deposit, a single roll of `1d100` MUST be used to assign its resource kind.
+10.	Resource kind assignment MUST follow the exact tables below.
+
+Rocky planets:
+
+| Roll   | Resource      |
+|--------|---------------|
+| 01     | GOLD          |
+| 02–16  | FUEL          |
+| 17–61  | METALLICS     |
+| 62–100 | NON_METALLICS |
+
+Gas-giant planets:
+
+| Roll   | Resource       |
+|--------|----------------|
+| 01     | GOLD           |
+| 02–66  | FUEL           |
+| 67–83  | METALLICS      |
+| 84–100 | NON_METALLICS  |
+
+Asteroid-belt planets:
+
+| Roll   | Resource       |
+|--------|----------------|
+| 01–02  | GOLD           |
+| 03–12  | FUEL           |
+| 13–77  | METALLICS      |
+| 78–100 | NON_METALLICS  |
+
+### Step 3 — Quantity Determination
+11.	For deposits of type METALLICS, NON_METALLICS, or FUEL, quantity MUST be determined as:
+
+    quantity := sum of 99 rolls of 1..1,000,000
+
+12.	For deposits of type GOLD, quantity MUST be determined as:
+
+    quantity := sum of 9 rolls of 1..1,000,000
+
+13.	Quantities MUST fall within the ranges defined in Rule 6 prior to modifiers.
+
+### Step 4 — Yield Determination
+14.	Yield MUST be determined as follows:
+
+* METALLICS, NON_METALLICS: 1d10
+* FUEL: 1d6
+* GOLD: 1d3
+
+15.	Yield MUST be stored exactly as rolled before modifiers.
+
+### Step 5 — Planet-Type Modifiers
+
+#### 5A — GOLD on Asteroid Belts
+16.	If the planet type is `asteroid-belt` and the deposit kind is GOLD:
+
+* A bonus percentage MUST be computed as 25 + 1d51.
+* Quantity MUST be updated as:
+
+    quantity := floor(quantity * (100 + bonusPct) / 100)
+
+* Yield MUST be set to 1.
+
+#### 5B — FUEL on Gas Giants
+17.	If the planet type is `gas-giant` and the deposit kind is FUEL:
+
+* A bonus percentage MUST be computed as 1d25.
+* Quantity MUST be updated as:
+
+    quantity := ceil(quantity * (100 + bonusPct) / 100)
+
+#### 5C — Yield Scaling by Planet Type
+18.	After applying Rules 16–17, yield MUST be modified for all deposits as follows:
+
+* On `asteroid-belt`: yield := ceil(yield / 3)
+* On `gas-giant`: yield := floor(yield * 125 / 100) with a minimum of 1
+* On `rocky`: no change
+
+### Step 6 — Caps and Conversions
+19.	Each deposit MUST have a computed value:
+
+    value := quantity * yield
+
+20.	Ties in value MUST be resolved by deposit generation order (earlier wins).
+
+#### 6A — GOLD Cap for `rocky` and `gas-giant` planets
+21.	A `rocky` or `gas-giant` planet MUST NOT have more than 4 GOLD deposits. (Asteroid belts are not limited.)
+22.	If more than 4 GOLD deposits exist for a `rocky` or `gas-giant` planet:
+
+* GOLD deposits MUST be sorted by (value ascending, generation order ascending).
+* Excess deposits MUST be converted as follows, using their original yield:
+  * yield 1 → convert to FUEL
+  * yield 2 → convert to METALLICS
+  * yield 3 → convert to NON_METALLICS
+* Converted deposits MUST have:
+
+    quantity := quantity * 10
+
+* Yield after conversion MAY exceed normal yield ranges.
+
+#### 6B — FUEL Cap for `rocky` and `asteroid-belt` planets
+23.	A `rocky` or `asteroid-belt` planet MUST NOT have more than 12 FUEL deposits. (Gas giants are not limited.)
+24.	If more than 12 FUEL deposits exist for a `rocky` or `asteroid-belt` planet:
+
+* FUEL deposits MUST be sorted by (value ascending, generation order ascending).
+* Excess deposits MUST be converted as:
+  * yield in {1,3,5} → METALLICS
+  * yield in {2,4,6} → NON_METALLICS
+
+### Invalid-Input Behavior
+25.	Any deposit with an undefined resource kind MUST cause generation to panic.
+26.	Any quantity or yield outside defined ranges prior to modifiers MUST cause generation to panic.
+27.	Any arithmetic overflow or underflow during quantity or yield computation MUST cause generation to panic.
+
+### Summary Invariants
+* All randomness flows exclusively from planet_rng.
+* Deposit count is fixed before any conversion.
+* GOLD ≤ 4 per `rocky` or `gas-giant` planet after caps.
+* FUEL ≤ 12 per `rocky` or `asteroid-belt` planet after caps.
+* Conversion preserves generation order determinism.
+* Given identical inputs and PRNG state, deposits are identical.
+
+---
+
+## Planet Habitability Generation (Candidate)
+
+### Scope and Definitions
+1.	Each planet MUST have a Habitability value.
+2.	Habitability MUST be an integer in the inclusive range `[0..25]`.
+3.	All randomness used to generate Habitability MUST use the planet’s deterministic PRNG `planet_rng`.
+4.	No other PRNG source MUST be consulted.
+
+Invariant:
+* Given identical `planet_rng` state, orbit index, and planet type, Habitability is deterministic.
+
+### Helper Functions (Normative)
+5.	`RollNdS(n, s)` MUST return the sum of `n` independent rolls of integers in `[1..s]`.
+6.	`RollPercent()` MUST return an integer in `[1..100]`.
+7.	`Clamp(x, lo, hi)` MUST return:
+
+* `lo` if x < lo
+* `hi` if x > hi
+* otherwise `x`
+
+### Rocky Planet Habitability
+
+#### Two-Phase Generation
+8.	Habitability for `rocky` planets MUST be generated in two phases, in order:
+* Habitable gate
+* Capped bell roll
+
+#### Rocky Habitable Gate
+9.	Let `orbit` be the planet’s orbit index `(1..10)`.
+10.	The `rocky` habitable gate probability `P_rocky[orbit]` MUST be defined as:
+
+| Orbit | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8 | 9 | 10 |
+|-------|----|----|----|----|----|----|----|---|---|----|
+| %     | 10 | 20 | 40 | 80 | 40 | 20 | 10 | 5 | 2 | 1  |
+
+11.	A roll `r := RollPercent()` MUST be performed.
+12.	If `r > P_rocky[orbit]`, then:
+
+* Habitability MUST be set to 0
+* Habitability generation for this planet MUST terminate
+
+13.	If `r ≤ P_rocky[orbit]`, generation MUST continue to the capped bell roll.
+
+#### Rocky Capped Bell Roll
+
+##### Orbit Maximum
+14.	The maximum Habitability value `Hmax_rocky[orbit]` MUST be defined as:
+
+| Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
+|-------|---|----|----|----|----|----|---|---|---|----|
+| Hmax  | 8 | 16 | 22 | 25 | 22 | 16 | 8 | 4 | 2 | 1  |
+
+
+##### Base Bell Roll
+15.	A base value `b` MUST be computed as:
+
+    b := RollNdS(3, 6) - 3
+
+16.	`b` MUST be an integer in `[0..15]`.
+
+##### Scaling and Assignment
+17.	Let `Hmax := Hmax_rocky[orbit]`.
+18.	A provisional habitability value `h` MUST be computed as:
+
+    h := floor(b * Hmax / 15)
+
+19.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+20.	Final Habitability MUST be assigned as:
+
+    Habitability := Clamp(h, 0, 25)
+
+### Gas Giant Habitability
+
+#### Two-Phase Generation
+21.	Habitability for `gas-giant` planets MUST be generated in two phases, in order:
+
+* Habitable gate
+* Moon habitability roll
+
+#### Gas Giant Habitable Gate
+22.	Gas giants MUST use half the `rocky` gate probability (rounded up):
+
+    P_gas[orbit] := P_rocky[orbit] / 2
+
+23.	The resulting probabilities MUST be:
+
+| Orbit | 1 | 2  | 3  | 4  | 5  | 6  | 7 | 8 | 9 | 10 |
+|-------|---|----|----|----|----|----|---|---|---|----|
+| %     | 5 | 10 | 20 | 40 | 20 | 10 | 5 | 3 | 1 | 1  |
+
+24.	A roll `r := RollPercent()` MUST be performed.
+25.	If r > P_gas[orbit], then:
+
+* Habitability MUST be set to 0
+* Habitability generation for this planet MUST terminate
+
+26.	If `r ≤ P_gas[orbit]`, generation MUST continue to the moon habitability roll.
+
+#### Gas Giant Moon Habitability Roll
+27.	A provisional habitability value `h` MUST be computed as:
+
+    h := RollNdS(2, 4) - orbit
+
+28.	If `orbit ≥ 5`, then:
+
+    h := h + RollNdS(1, 4)
+
+29.	`h` MUST be clamped as:
+
+    h := Clamp(h, 0, 25)
+
+30.	If the planet passed the habitable gate and `h == 0`, then `h` MUST be set to 1.
+31.	Final Habitability MUST be assigned as:
+
+    Habitability := h
+
+### Determinism and Independence Constraints
+32.	Habitability generation MUST NOT depend on:
+
+* system coordinates,
+* star properties,
+* physical distances or geometry other than orbit index,
+* any PRNG other than planet_rng.
+
+33.	Habitability generation MUST depend only on:
+
 * planet type,
-* PRNG state.
+* orbit index,
+* planet_rng state.
 
----
+### Invalid-Input Behavior
+34.	Any orbit index outside `1..10` MUST cause habitability generation to panic.
+35.	Any Habitability value outside `[0..25]` after final assignment MUST cause generation to panic.
+36.	Any failure to generate required random values MUST cause generation to panic.
 
-### Invalid Inputs
-
-23. Any orbit index outside `1..10` is invalid and **MUST cause an error**.
-
-24. Any orbit letter outside `'a'..'j'` or `'A'..'J'` is invalid and **MUST cause an error**.
+### Summary Invariants
+* Habitability is always an integer in `[0..25]`.
+* Non-habitable planets always have Habitability 0.
+* Habitable planets always have Habitability ≥ 1.
+* Rocky planets in orbit 4 are the only planets capable of reaching Habitability 25.
+* Given identical inputs and PRNG state, Habitability values are identical across implementations.
 
 ---
